@@ -1,0 +1,2 @@
+CREATE DATABASE meltano_state;
+GRANT ALL PRIVILEGES ON DATABASE meltano_state TO root;

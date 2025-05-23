@@ -1,0 +1,70 @@
+name: meltano-bug
+
+x-meltano-env: &meltano-env
+  MELTANO_DATABASE_URI: 'postgresql://root:root@postgres:5432/meltano_state'
+  #MELTANO_DATABASE_URI: 'postgresql+psycopg://root:root@postgres:5432/meltano_state'
+  MELTANO_ENVIRONMENT: dev
+  AIRFLOW_DATABASE_SQL_ALCHEMY_CONN: 'postgresql://root:root@postgres:5432/meltano_state'
+
+services:
+    postgres:
+        image: postgres:16
+        #env_file:
+        #    - ./envs/.env
+        environment:
+            POSTGRES_DB: ${POSTGRES_DATABASE:-dev}
+            POSTGRES_USER: ${POSTGRES_USERNAME:-root}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-root}
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            #- ./certs:/certs
+            - ./docker/initdb/00-create-meltanodb.sql:/docker-entrypoint-initdb.d/00-create-meltanodb.sql  
+        ports:
+            - '5432:5432'
+    meltano:
+        image: bug/meltano
+        build:
+            context: ./sync
+            dockerfile: Dockerfile
+        ports:
+            - 8793:8793
+        expose:
+            - 8793
+        volumes:
+            # uncomment these if you want to work on the sync project
+            #- ../sync/:/project
+            #- ../sync/.meltano:/project/.meltano
+            - ./sync/meltano.yml:/project/meltano.yml
+            - ./sync/.meltano/logs:/project/.meltano/logs
+            - ./sync/.meltano/run:/project/.meltano/run
+            - ./sync/.meltano/meltano.db:/project/.meltano/meltano.db
+        command: invoke airflow scheduler
+        restart: unless-stopped
+        depends_on:
+            - postgres
+        environment:
+          <<: *meltano-env
+
+    airflow-webserver:
+        image: bug/meltano
+        volumes:
+            #- ../sync/:/project
+            #- ../sync/.meltano:/project/.meltano
+            - ./sync/meltano.yml:/project/meltano.yml
+            - ./sync/.meltano/logs:/project/.meltano/logs
+            - ./sync/.meltano/run:/project/.meltano/run
+            - ./sync/.meltano/meltano.db:/project/.meltano/meltano.db
+        command: invoke airflow webserver
+        expose:
+            - 8080
+        ports:
+            - 8080:8080
+        restart: unless-stopped
+        depends_on:
+            - meltano
+        environment:
+          <<: *meltano-env
+
+volumes:
+    postgres_data:
+

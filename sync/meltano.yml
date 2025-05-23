@@ -1,0 +1,64 @@
+version: 1
+default_environment: dev
+project_id: 928838c9-1024-41af-91d6-20d02de418e0
+#database_uri: postgresql+psycopg://root:root@postgres:5432/meltano_state
+environments:
+- name: dev
+  config:
+    plugins:
+      extractors:
+      - name: tap-snowflake
+        config:
+          account: DUMMY
+          user: DUMMY
+          warehouse: DUMMY
+          database: DUMMY
+          schema: bg
+          role: DUMMY
+          private_key_path: ./certs/rsa_key.p8
+      loaders:
+      - name: target-postgres
+        config:
+          host: postgres
+          port: 5432
+          user: root
+          password: root
+          database: dev
+          schema: bg
+          default_target_schema: bg
+          load_method: overwrite 
+          hard_delete: true
+          batch_size_rows: 100000
+      utilities:
+      - name: airflow
+        config:
+          database.sql_alchemy_conn: 'postgresql://root:root@postgres:5432/meltano_state'
+          core.executor: LocalExecutor
+
+plugins:
+  extractors:
+  - name: tap-snowflake
+    variant: meltanolabs
+    pip_url: meltanolabs-tap-snowflake==v0.1.0 certifi==2025.1.31
+  loaders:
+  - name: target-postgres
+    variant: meltanolabs
+    pip_url: 'meltanolabs-target-postgres<0.4.1' 
+    #pip_url: 'meltanolabs-target-postgres singer-sdk<0.46.0'
+  utilities:
+  - name: airflow
+    variant: apache
+    pip_url: git+https://github.com/meltano/airflow-ext.git@main apache-airflow==2.10.5 psycopg2-binary==2.9.10 
+      --constraint 
+      https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-no-providers-${MELTANO__PYTHON_VERSION}.txt
+
+jobs:
+- name: snowflake-to-postgres
+  tasks:
+  - tap-snowflake target-postgres
+
+schedules:
+- name: snowflake-daily
+  interval: 0 11 * * *
+  job: snowflake-to-postgres
+
